@@ -1,4 +1,5 @@
 use super::command::Command;
+use std::cmp::{max, min};
 
 pub type Point = (isize, isize);
 
@@ -13,16 +14,32 @@ impl Segment {
         use Segment::*;
         match (self, other) {
             (Vertical { x, y0, y1 }, Horizontal { y, x0, x1 })
-                if x0 < x && x < x1 && y0 < y && y < y1 =>
+                if min(x0, x1) < x && x < max(x0, x1) && min(y0, y1) < y && y < max(y0, y1) =>
             {
                 Some((*x, *y))
             }
             (Horizontal { y, x0, x1 }, Vertical { x, y0, y1 })
-                if x0 < x && x < x1 && y0 < y && y < y1 =>
+                if min(x0, x1) < x && x < max(x0, x1) && min(y0, y1) < y && y < max(y0, y1) =>
             {
                 Some((*x, *y))
             }
             _ => None,
+        }
+    }
+
+    pub fn magnitude(&self) -> isize {
+        use Segment::*;
+        match self {
+            Vertical { y0, y1, .. } => (y1 - y0).abs(),
+            Horizontal { x0, x1, .. } => (x1 - x0).abs(),
+        }
+    }
+
+    pub fn magnitude_to_point(&self, point: &Point) -> isize {
+        use Segment::*;
+        match self {
+            Vertical { y0, .. } => (point.1 - y0).abs(),
+            Horizontal { x0, .. } => (point.0 - x0).abs(),
         }
     }
 }
@@ -65,16 +82,16 @@ where
             Command::Down(size) => (
                 Segment::Vertical {
                     x: previous_point.0,
-                    y0: previous_point.1 - size,
-                    y1: previous_point.1,
+                    y0: previous_point.1,
+                    y1: previous_point.1 - size,
                 },
                 (self.current_point.0, self.current_point.1 - size),
             ),
             Command::Left(size) => (
                 Segment::Horizontal {
                     y: previous_point.1,
-                    x0: previous_point.0 - size,
-                    x1: previous_point.0,
+                    x0: previous_point.0,
+                    x1: previous_point.0 - size,
                 },
                 (self.current_point.0 - size, self.current_point.1),
             ),
@@ -144,16 +161,16 @@ mod test {
             iter.next(),
             Some(Vertical {
                 x: 10,
-                y0: 5,
-                y1: 10
+                y0: 10,
+                y1: 5
             })
         );
         assert_eq!(
             iter.next(),
             Some(Horizontal {
                 y: 5,
-                x0: 5,
-                x1: 10
+                x0: 10,
+                x1: 5
             })
         );
         assert_eq!(iter.next(), None);

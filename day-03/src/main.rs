@@ -21,7 +21,7 @@ fn main() {
     let second_iter: Vec<Segment> = SegmentIter::new(second.into_iter()).collect();
 
     let mut min_manhatten_distance = None;
-    for first_segment in first_iter {
+    for first_segment in &first_iter[..] {
         for second_segment in &second_iter[..] {
             if let Some((x, y)) = first_segment.intersection(second_segment) {
                 let manhatten_distance = x + y;
@@ -37,6 +37,34 @@ fn main() {
     }
 
     if let Some(min) = min_manhatten_distance {
+        println!("{}", min);
+    }
+
+    let mut min_path = None;
+    let mut first_path_magnitude = 0;
+    for first_segment in &first_iter[..] {
+        let mut second_path_magnitude = 0;
+        for second_segment in &second_iter[..] {
+            if let Some(pt) = first_segment.intersection(second_segment) {
+                let total_distance = first_segment.magnitude_to_point(&pt)
+                    + second_segment.magnitude_to_point(&pt)
+                    + first_path_magnitude
+                    + second_path_magnitude;
+
+                if let Some(min) = min_path {
+                    if total_distance < min {
+                        min_path = Some(total_distance)
+                    }
+                } else {
+                    min_path = Some(total_distance)
+                }
+            }
+            second_path_magnitude += second_segment.magnitude();
+        }
+        first_path_magnitude += first_segment.magnitude();
+    }
+
+    if let Some(min) = min_path {
         println!("{}", min);
     }
 }
