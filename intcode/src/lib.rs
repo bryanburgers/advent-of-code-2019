@@ -35,27 +35,51 @@ enum Instruction {
     Mul(InputParameter, InputParameter, OutputParameter),
     Input(OutputParameter),
     Output(InputParameter),
+    JumpIfTrue(InputParameter, InputParameter),
+    JumpIfFalse(InputParameter, InputParameter),
+    LessThan(InputParameter, InputParameter, OutputParameter),
+    Equals(InputParameter, InputParameter, OutputParameter),
     Halt,
 }
 
 impl Instruction {
     pub fn decode(instruction: isize) -> Result<Self, ()> {
-        match instruction % 100 {
-            1 => Ok(Instruction::Add(
+        let instruction = match instruction % 100 {
+            1 => Instruction::Add(
                 Self::input_mode(instruction, 2)?,
                 Self::input_mode(instruction, 3)?,
                 Self::output_mode(instruction, 4)?,
-            )),
-            2 => Ok(Instruction::Mul(
+            ),
+            2 => Instruction::Mul(
                 Self::input_mode(instruction, 2)?,
                 Self::input_mode(instruction, 3)?,
                 Self::output_mode(instruction, 4)?,
-            )),
-            3 => Ok(Instruction::Input(Self::output_mode(instruction, 2)?)),
-            4 => Ok(Instruction::Output(Self::input_mode(instruction, 2)?)),
-            99 => Ok(Instruction::Halt),
-            _ => Err(()),
-        }
+            ),
+            3 => Instruction::Input(Self::output_mode(instruction, 2)?),
+            4 => Instruction::Output(Self::input_mode(instruction, 2)?),
+            5 => Instruction::JumpIfTrue(
+                Self::input_mode(instruction, 2)?,
+                Self::input_mode(instruction, 3)?,
+            ),
+            6 => Instruction::JumpIfFalse(
+                Self::input_mode(instruction, 2)?,
+                Self::input_mode(instruction, 3)?,
+            ),
+            7 => Instruction::LessThan(
+                Self::input_mode(instruction, 2)?,
+                Self::input_mode(instruction, 3)?,
+                Self::output_mode(instruction, 4)?,
+            ),
+            8 => Instruction::Equals(
+                Self::input_mode(instruction, 2)?,
+                Self::input_mode(instruction, 3)?,
+                Self::output_mode(instruction, 4)?,
+            ),
+            99 => Instruction::Halt,
+            _ => Err(())?,
+        };
+
+        Ok(instruction)
     }
 
     fn input_mode(instruction: isize, position: u32) -> Result<InputParameter, ()> {
@@ -156,6 +180,10 @@ impl IntcodeProcess {
             Instruction::Mul(in0, in1, out) => self.mul(in0, in1, out),
             Instruction::Input(out) => self.input(out),
             Instruction::Output(in0) => self.output(in0),
+            Instruction::JumpIfTrue(in0, in1) => self.jump_if_true(in0, in1),
+            Instruction::JumpIfFalse(in0, in1) => self.jump_if_false(in0, in1),
+            Instruction::LessThan(in0, in1, out) => self.less_than(in0, in1, out),
+            Instruction::Equals(in0, in1, out) => self.equals(in0, in1, out),
             Instruction::Halt => self.halt(),
         }
     }
@@ -235,6 +263,74 @@ impl IntcodeProcess {
         let val0 = self.load_input(in0, self.instruction_counter + 1)?;
         self.outputs.push(val0);
         self.instruction_counter += 2;
+
+        Ok(())
+    }
+
+    fn jump_if_true(
+        &mut self,
+        in0: InputParameter,
+        in1: InputParameter,
+    ) -> Result<(), IntcodeError> {
+        let val0 = self.load_input(in0, self.instruction_counter + 1)?;
+        let val1 = self.load_input(in1, self.instruction_counter + 2)?;
+        if val0 != 0 {
+            self.instruction_counter = val1 as usize;
+        } else {
+            self.instruction_counter += 3;
+        }
+
+        Ok(())
+    }
+
+    fn jump_if_false(
+        &mut self,
+        in0: InputParameter,
+        in1: InputParameter,
+    ) -> Result<(), IntcodeError> {
+        let val0 = self.load_input(in0, self.instruction_counter + 1)?;
+        let val1 = self.load_input(in1, self.instruction_counter + 2)?;
+        if val0 == 0 {
+            self.instruction_counter = val1 as usize;
+        } else {
+            self.instruction_counter += 3;
+        }
+
+        Ok(())
+    }
+
+    fn less_than(
+        &mut self,
+        in0: InputParameter,
+        in1: InputParameter,
+        out: OutputParameter,
+    ) -> Result<(), IntcodeError> {
+        let val0 = self.load_input(in0, self.instruction_counter + 1)?;
+        let val1 = self.load_input(in1, self.instruction_counter + 2)?;
+        let out_val = match val0 < val1 {
+            true => 1,
+            false => 0,
+        };
+        self.store_output(out, self.instruction_counter + 3, out_val)?;
+        self.instruction_counter += 4;
+
+        Ok(())
+    }
+
+    fn equals(
+        &mut self,
+        in0: InputParameter,
+        in1: InputParameter,
+        out: OutputParameter,
+    ) -> Result<(), IntcodeError> {
+        let val0 = self.load_input(in0, self.instruction_counter + 1)?;
+        let val1 = self.load_input(in1, self.instruction_counter + 2)?;
+        let out_val = match val0 == val1 {
+            true => 1,
+            false => 0,
+        };
+        self.store_output(out, self.instruction_counter + 3, out_val)?;
+        self.instruction_counter += 4;
 
         Ok(())
     }
