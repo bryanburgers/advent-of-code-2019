@@ -1,5 +1,4 @@
-mod intcode;
-use intcode::{Intcode, IntcodeError};
+use intcode::{IntcodeError, IntcodeProcessor};
 use std::io::{self, Read};
 
 fn main() {
@@ -14,7 +13,7 @@ fn main() {
         .map(|s| s.parse::<isize>().unwrap())
         .collect();
 
-    let mut processor = Intcode::from_vec(memory.clone());
+    let mut processor = IntcodeProcessor::from_vec(memory.clone());
 
     processor.store(1, 12).unwrap();
     processor.store(2, 2).unwrap();
@@ -25,7 +24,7 @@ fn main() {
 
     'outer: for noun in 0..=99 {
         for verb in 0..=99 {
-            let mut processor = Intcode::from_vec(memory.clone());
+            let mut processor = IntcodeProcessor::from_vec(memory.clone());
             processor.store(1, noun).unwrap();
             processor.store(2, verb).unwrap();
             let result = processor.run();

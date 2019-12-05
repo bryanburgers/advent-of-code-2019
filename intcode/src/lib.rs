@@ -1,4 +1,4 @@
-pub struct Intcode {
+pub struct IntcodeProcessor {
     memory: Vec<isize>,
     instruction_counter: usize,
 }
@@ -10,9 +10,9 @@ pub enum IntcodeError {
     Segfault(isize),
 }
 
-impl Intcode {
-    pub fn from_vec(memory: Vec<isize>) -> Intcode {
-        Intcode {
+impl IntcodeProcessor {
+    pub fn from_vec(memory: Vec<isize>) -> Self {
+        IntcodeProcessor {
             memory,
             instruction_counter: 0,
         }
@@ -101,7 +101,7 @@ mod test {
 
     #[test]
     fn test_load() {
-        let intcode = Intcode::from_vec(vec![0, 2, 4, 6, 8]);
+        let intcode = IntcodeProcessor::from_vec(vec![0, 2, 4, 6, 8]);
 
         assert_eq!(intcode.load(0), Ok(0));
         assert_eq!(intcode.load(1), Ok(2));
@@ -112,7 +112,7 @@ mod test {
 
     #[test]
     fn test_store() {
-        let mut intcode = Intcode::from_vec(vec![0, 0, 0, 0, 0]);
+        let mut intcode = IntcodeProcessor::from_vec(vec![0, 0, 0, 0, 0]);
 
         assert_eq!(intcode.store(0, 0), Ok(()));
         assert_eq!(intcode.load(0), Ok(0));
@@ -126,7 +126,8 @@ mod test {
 
     #[test]
     fn test_step() {
-        let mut intcode = Intcode::from_vec(vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50]);
+        let mut intcode =
+            IntcodeProcessor::from_vec(vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50]);
 
         assert_eq!(intcode.ic(), 0);
 
@@ -144,7 +145,8 @@ mod test {
 
     #[test]
     fn test_run() {
-        let mut intcode = Intcode::from_vec(vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50]);
+        let mut intcode =
+            IntcodeProcessor::from_vec(vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50]);
 
         assert_eq!(intcode.run(), Err(IntcodeError::CatchFire));
         assert_eq!(intcode.ic(), 8);
@@ -154,20 +156,44 @@ mod test {
 
     #[test]
     fn test_cases() {
-        let mut intcode = Intcode::from_vec(vec![1, 0, 0, 0, 99]);
+        let mut intcode = IntcodeProcessor::from_vec(vec![1, 0, 0, 0, 99]);
         assert_eq!(intcode.run(), Err(IntcodeError::CatchFire));
         assert_eq!(intcode.memory(), &[2, 0, 0, 0, 99]);
 
-        let mut intcode = Intcode::from_vec(vec![2, 3, 0, 3, 99]);
+        let mut intcode = IntcodeProcessor::from_vec(vec![2, 3, 0, 3, 99]);
         assert_eq!(intcode.run(), Err(IntcodeError::CatchFire));
         assert_eq!(intcode.memory(), &[2, 3, 0, 6, 99]);
 
-        let mut intcode = Intcode::from_vec(vec![2, 4, 4, 5, 99, 0]);
+        let mut intcode = IntcodeProcessor::from_vec(vec![2, 4, 4, 5, 99, 0]);
         assert_eq!(intcode.run(), Err(IntcodeError::CatchFire));
         assert_eq!(intcode.memory(), &[2, 4, 4, 5, 99, 9801]);
 
-        let mut intcode = Intcode::from_vec(vec![1, 1, 1, 4, 99, 5, 6, 0, 99]);
+        let mut intcode = IntcodeProcessor::from_vec(vec![1, 1, 1, 4, 99, 5, 6, 0, 99]);
         assert_eq!(intcode.run(), Err(IntcodeError::CatchFire));
         assert_eq!(intcode.memory(), &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
+    }
+
+    #[test]
+    fn test_day_2() {
+        let input = vec![
+            1, 0, 0, 3, 1, 1, 2, 3, 1, 3, 4, 3, 1, 5, 0, 3, 2, 1, 9, 19, 1, 19, 5, 23, 2, 23, 13,
+            27, 1, 10, 27, 31, 2, 31, 6, 35, 1, 5, 35, 39, 1, 39, 10, 43, 2, 9, 43, 47, 1, 47, 5,
+            51, 2, 51, 9, 55, 1, 13, 55, 59, 1, 13, 59, 63, 1, 6, 63, 67, 2, 13, 67, 71, 1, 10, 71,
+            75, 2, 13, 75, 79, 1, 5, 79, 83, 2, 83, 9, 87, 2, 87, 13, 91, 1, 91, 5, 95, 2, 9, 95,
+            99, 1, 99, 5, 103, 1, 2, 103, 107, 1, 10, 107, 0, 99, 2, 14, 0, 0,
+        ];
+        let mut processor = IntcodeProcessor::from_vec(input.clone());
+        processor.store(1, 12).unwrap();
+        processor.store(2, 2).unwrap();
+        let result = processor.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+        assert_eq!(processor.load(0), Ok(3895705));
+
+        let mut processor = IntcodeProcessor::from_vec(input.clone());
+        processor.store(1, 64).unwrap();
+        processor.store(2, 17).unwrap();
+        let result = processor.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+        assert_eq!(processor.load(0), Ok(19690720));
     }
 }
