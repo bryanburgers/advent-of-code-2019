@@ -169,22 +169,26 @@ impl IntcodeProcess {
     }
 
     /// Execute the next instruction
-    pub fn step(&mut self) -> Result<(), IntcodeError> {
+    ///
+    /// If the command was an output, returns the value of the output. Otherwise returns nothing.
+    /// This makes implementing `run_to_output` easier. It's not very generic, but not adding
+    /// something generic until we need it.
+    fn step(&mut self) -> Result<Option<isize>, IntcodeError> {
         let instruction = self.load(self.instruction_counter as isize)?;
 
         let instruction = Instruction::decode(instruction)
             .map_err(|_| IntcodeError::UnknownInstruction(instruction))?;
 
         match instruction {
-            Instruction::Add(in0, in1, out) => self.add(in0, in1, out),
-            Instruction::Mul(in0, in1, out) => self.mul(in0, in1, out),
-            Instruction::Input(out) => self.input(out),
-            Instruction::Output(in0) => self.output(in0),
-            Instruction::JumpIfTrue(in0, in1) => self.jump_if_true(in0, in1),
-            Instruction::JumpIfFalse(in0, in1) => self.jump_if_false(in0, in1),
-            Instruction::LessThan(in0, in1, out) => self.less_than(in0, in1, out),
-            Instruction::Equals(in0, in1, out) => self.equals(in0, in1, out),
-            Instruction::Halt => self.halt(),
+            Instruction::Add(in0, in1, out) => self.add(in0, in1, out).map(|_| None),
+            Instruction::Mul(in0, in1, out) => self.mul(in0, in1, out).map(|_| None),
+            Instruction::Input(out) => self.input(out).map(|_| None),
+            Instruction::Output(in0) => self.output(in0).map(|o| Some(o)),
+            Instruction::JumpIfTrue(in0, in1) => self.jump_if_true(in0, in1).map(|_| None),
+            Instruction::JumpIfFalse(in0, in1) => self.jump_if_false(in0, in1).map(|_| None),
+            Instruction::LessThan(in0, in1, out) => self.less_than(in0, in1, out).map(|_| None),
+            Instruction::Equals(in0, in1, out) => self.equals(in0, in1, out).map(|_| None),
+            Instruction::Halt => self.halt().map(|_| None),
         }
     }
 
@@ -192,6 +196,16 @@ impl IntcodeProcess {
     pub fn run(&mut self) -> Result<(), IntcodeError> {
         loop {
             self.step()?;
+        }
+    }
+
+    /// Execute instructions until we get an output
+    pub fn run_to_output(&mut self) -> Result<isize, IntcodeError> {
+        loop {
+            let result = self.step()?;
+            if let Some(output) = result {
+                return Ok(output);
+            }
         }
     }
 
@@ -259,12 +273,12 @@ impl IntcodeProcess {
         Ok(())
     }
 
-    fn output(&mut self, in0: InputParameter) -> Result<(), IntcodeError> {
+    fn output(&mut self, in0: InputParameter) -> Result<isize, IntcodeError> {
         let val0 = self.load_input(in0, self.instruction_counter + 1)?;
         self.outputs.push(val0);
         self.instruction_counter += 2;
 
-        Ok(())
+        Ok(val0)
     }
 
     fn jump_if_true(
@@ -375,11 +389,11 @@ mod test {
 
         assert_eq!(intcode.instruction_counter(), 0);
 
-        assert_eq!(intcode.step(), Ok(()));
+        assert_eq!(intcode.step(), Ok(None));
         assert_eq!(intcode.instruction_counter(), 4);
         assert_eq!(intcode.load(3), Ok(70));
 
-        assert_eq!(intcode.step(), Ok(()));
+        assert_eq!(intcode.step(), Ok(None));
         assert_eq!(intcode.instruction_counter(), 8);
         assert_eq!(intcode.load(0), Ok(3500));
 
@@ -473,5 +487,28 @@ mod test {
         let result = processor.run();
         assert_eq!(result, Err(IntcodeError::CatchFire));
         assert_eq!(processor.load(5), Ok(30));
+    }
+
+    #[test]
+    fn test_run_to_output() {
+        let input = vec![
+            3, 26, 1001, 26, -4, 26, 3, 27, 1002, 27, 2, 27, 1, 27, 26, 27, 4, 27, 1001, 28, -1,
+            28, 1005, 28, 6, 99, 0, 0, 5,
+        ];
+
+        let mut program_a = IntcodeProcess::from_vec(input.clone());
+        program_a.add_input(9);
+        program_a.add_input(0);
+        let mut program_b = IntcodeProcess::from_vec(input.clone());
+        program_b.add_input(8);
+        let mut program_c = IntcodeProcess::from_vec(input.clone());
+        program_c.add_input(7);
+        let mut program_d = IntcodeProcess::from_vec(input.clone());
+        program_d.add_input(6);
+        let mut program_e = IntcodeProcess::from_vec(input.clone());
+        program_e.add_input(5);
+
+        let result_a = program_a.run_to_output();
+        assert!(result_a.is_ok());
     }
 }
