@@ -88,6 +88,8 @@ impl Layer {
 
 #[derive(Debug)]
 struct Image {
+    width: usize,
+    height: usize,
     layers: Vec<Layer>,
 }
 
@@ -108,7 +110,119 @@ impl Image {
             }
         }
 
-        Ok(Image { layers })
+        Ok(Image {
+            width,
+            height,
+            layers,
+        })
+    }
+
+    fn rasterize(&self) -> RasterizedImage {
+        let mut pixels = Vec::new();
+
+        for _ in 0..self.width {
+            for _ in 0..self.height {
+                pixels.push(Pixel::Transparent);
+            }
+        }
+
+        for layer in self.layers.iter() {
+            for (idx, item) in layer.items.iter().enumerate() {
+                pixels[idx] = pixels[idx] + (*item).into()
+            }
+        }
+
+        RasterizedImage {
+            width: self.width,
+            height: self.height,
+            pixels,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct RasterizedImage {
+    width: usize,
+    height: usize,
+    pixels: Vec<Pixel>,
+}
+
+impl std::fmt::Display for RasterizedImage {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        let mut iter = self.pixels.iter();
+        for _ in 0..self.height {
+            for _ in 0..self.width {
+                write!(fmt, "{}", iter.next().unwrap())?;
+            }
+            write!(fmt, "\n")?;
+        }
+
+        assert_eq!(iter.next(), None);
+        Ok(())
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Copy)]
+enum Pixel {
+    Transparent,
+    Black,
+    White,
+}
+
+impl From<u8> for Pixel {
+    fn from(item: u8) -> Pixel {
+        match item {
+            0 => Pixel::Black,
+            1 => Pixel::White,
+            2 => Pixel::Transparent,
+            i => panic!("Unexpected pixel value {}", i),
+        }
+    }
+}
+
+impl Default for Pixel {
+    fn default() -> Self {
+        Pixel::Transparent
+    }
+}
+
+impl std::fmt::Debug for Pixel {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            "{}",
+            match self {
+                Pixel::White => " ",
+                Pixel::Black => "*",
+                Pixel::Transparent => "?",
+            }
+        )
+    }
+}
+
+impl std::fmt::Display for Pixel {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(
+            fmt,
+            "{}",
+            match self {
+                Pixel::Black => " ",
+                Pixel::White => "*",
+                Pixel::Transparent => "?",
+            }
+        )
+    }
+}
+
+impl std::ops::Add for Pixel {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        match self {
+            Pixel::Black => Pixel::Black,
+            Pixel::White => Pixel::White,
+            Pixel::Transparent => other,
+        }
     }
 }
 
@@ -132,4 +246,7 @@ fn main() {
     let ones = layer.count_digit(1);
     let twos = layer.count_digit(2);
     println!("{}", ones * twos);
+
+    let rasterized = image.rasterize();
+    println!("{}", rasterized);
 }
