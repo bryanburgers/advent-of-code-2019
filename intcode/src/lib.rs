@@ -17,19 +17,26 @@ pub enum IntcodeError {
 }
 
 /// The type of the input parameter
+#[derive(Debug)]
 enum InputParameter {
     /// Position mode means the parameter refers to a location in the memory space
     Position,
     /// Immediate mode means the parameter refers to the value that should be used
     Immediate,
+    /// Like position mode, but relative to the relative offset register
+    Relative,
 }
 
 /// The type of the output parameter
+#[derive(Debug)]
 enum OutputParameter {
     /// Position mode means the parameter refers to a location in the memory space
     Position,
+    /// Like position mode, but relative to the relative offset register
+    Relative,
 }
 
+#[derive(Debug)]
 enum Instruction {
     Add(InputParameter, InputParameter, OutputParameter),
     Mul(InputParameter, InputParameter, OutputParameter),
@@ -39,6 +46,7 @@ enum Instruction {
     JumpIfFalse(InputParameter, InputParameter),
     LessThan(InputParameter, InputParameter, OutputParameter),
     Equals(InputParameter, InputParameter, OutputParameter),
+    RelativeMode(InputParameter),
     Halt,
 }
 
@@ -46,35 +54,36 @@ impl Instruction {
     pub fn decode(instruction: isize) -> Result<Self, ()> {
         let instruction = match instruction % 100 {
             1 => Instruction::Add(
-                Self::input_mode(instruction, 2)?,
-                Self::input_mode(instruction, 3)?,
-                Self::output_mode(instruction, 4)?,
+                Self::decode_input_mode(instruction, 2)?,
+                Self::decode_input_mode(instruction, 3)?,
+                Self::decode_output_mode(instruction, 4)?,
             ),
             2 => Instruction::Mul(
-                Self::input_mode(instruction, 2)?,
-                Self::input_mode(instruction, 3)?,
-                Self::output_mode(instruction, 4)?,
+                Self::decode_input_mode(instruction, 2)?,
+                Self::decode_input_mode(instruction, 3)?,
+                Self::decode_output_mode(instruction, 4)?,
             ),
-            3 => Instruction::Input(Self::output_mode(instruction, 2)?),
-            4 => Instruction::Output(Self::input_mode(instruction, 2)?),
+            3 => Instruction::Input(Self::decode_output_mode(instruction, 2)?),
+            4 => Instruction::Output(Self::decode_input_mode(instruction, 2)?),
             5 => Instruction::JumpIfTrue(
-                Self::input_mode(instruction, 2)?,
-                Self::input_mode(instruction, 3)?,
+                Self::decode_input_mode(instruction, 2)?,
+                Self::decode_input_mode(instruction, 3)?,
             ),
             6 => Instruction::JumpIfFalse(
-                Self::input_mode(instruction, 2)?,
-                Self::input_mode(instruction, 3)?,
+                Self::decode_input_mode(instruction, 2)?,
+                Self::decode_input_mode(instruction, 3)?,
             ),
             7 => Instruction::LessThan(
-                Self::input_mode(instruction, 2)?,
-                Self::input_mode(instruction, 3)?,
-                Self::output_mode(instruction, 4)?,
+                Self::decode_input_mode(instruction, 2)?,
+                Self::decode_input_mode(instruction, 3)?,
+                Self::decode_output_mode(instruction, 4)?,
             ),
             8 => Instruction::Equals(
-                Self::input_mode(instruction, 2)?,
-                Self::input_mode(instruction, 3)?,
-                Self::output_mode(instruction, 4)?,
+                Self::decode_input_mode(instruction, 2)?,
+                Self::decode_input_mode(instruction, 3)?,
+                Self::decode_output_mode(instruction, 4)?,
             ),
+            9 => Instruction::RelativeMode(Self::decode_input_mode(instruction, 2)?),
             99 => Instruction::Halt,
             _ => Err(())?,
         };
@@ -82,23 +91,78 @@ impl Instruction {
         Ok(instruction)
     }
 
-    fn input_mode(instruction: isize, position: u32) -> Result<InputParameter, ()> {
+    pub fn encode(&self) -> isize {
+        use Instruction::*;
+        match self {
+            Add(in2, in3, out4) => {
+                1 + Self::encode_input_mode(in2, 2)
+                    + Self::encode_input_mode(in3, 3)
+                    + Self::encode_output_mode(out4, 4)
+            }
+            Mul(in2, in3, out4) => {
+                2 + Self::encode_input_mode(in2, 2)
+                    + Self::encode_input_mode(in3, 3)
+                    + Self::encode_output_mode(out4, 4)
+            }
+            Input(out2) => 3 + Self::encode_output_mode(out2, 2),
+            Output(in2) => 4 + Self::encode_input_mode(in2, 2),
+            JumpIfTrue(in2, in3) => {
+                5 + Self::encode_input_mode(in2, 2) + Self::encode_input_mode(in3, 3)
+            }
+            JumpIfFalse(in2, in3) => {
+                6 + Self::encode_input_mode(in2, 2) + Self::encode_input_mode(in3, 3)
+            }
+            LessThan(in2, in3, out4) => {
+                7 + Self::encode_input_mode(in2, 2)
+                    + Self::encode_input_mode(in3, 3)
+                    + Self::encode_output_mode(out4, 4)
+            }
+            Equals(in2, in3, out4) => {
+                8 + Self::encode_input_mode(in2, 2)
+                    + Self::encode_input_mode(in3, 3)
+                    + Self::encode_output_mode(out4, 4)
+            }
+            RelativeMode(in2) => 9 + Self::encode_input_mode(in2, 2),
+            Halt => 99,
+        }
+    }
+
+    fn decode_input_mode(instruction: isize, position: u32) -> Result<InputParameter, ()> {
         let position = 10_isize.pow(position);
         let value = instruction / position % 10;
         match value {
             0 => Ok(InputParameter::Position),
             1 => Ok(InputParameter::Immediate),
+            2 => Ok(InputParameter::Relative),
             _ => Err(()),
         }
     }
 
-    fn output_mode(instruction: isize, position: u32) -> Result<OutputParameter, ()> {
+    fn decode_output_mode(instruction: isize, position: u32) -> Result<OutputParameter, ()> {
         let position = 10_isize.pow(position);
         let value = instruction / position % 10;
         match value {
             0 => Ok(OutputParameter::Position),
+            2 => Ok(OutputParameter::Relative),
             _ => Err(()),
         }
+    }
+
+    fn encode_input_mode(mode: &InputParameter, position: u32) -> isize {
+        10_isize.pow(position)
+            * match mode {
+                InputParameter::Position => 0,
+                InputParameter::Immediate => 1,
+                InputParameter::Relative => 2,
+            }
+    }
+
+    fn encode_output_mode(mode: &OutputParameter, position: u32) -> isize {
+        10_isize.pow(position)
+            * match mode {
+                OutputParameter::Position => 0,
+                OutputParameter::Relative => 2,
+            }
     }
 }
 
@@ -106,6 +170,7 @@ impl Instruction {
 pub struct IntcodeProcess {
     memory: Vec<isize>,
     instruction_counter: usize,
+    relative_base: isize,
     inputs: VecDeque<isize>,
     outputs: Vec<isize>,
 }
@@ -116,6 +181,7 @@ impl IntcodeProcess {
         IntcodeProcess {
             memory,
             instruction_counter: 0,
+            relative_base: 0,
             inputs: VecDeque::new(),
             outputs: Vec::new(),
         }
@@ -131,6 +197,11 @@ impl IntcodeProcess {
         &self.memory[..]
     }
 
+    /// Get the current relative base
+    pub fn relative_base(&self) -> isize {
+        self.relative_base
+    }
+
     /// Retrieve a value from memory at the given address
     pub fn load(&self, address: isize) -> Result<isize, IntcodeError> {
         if address < 0 {
@@ -144,6 +215,19 @@ impl IntcodeProcess {
         Ok(self.memory[address_u])
     }
 
+    /// Retrieve a value from  memory at the given address, resizing the address space if necessary
+    fn load_with_resize(&mut self, address: isize) -> Result<isize, IntcodeError> {
+        if address < 0 {
+            Err(IntcodeError::Segfault(address))?;
+        }
+        let address_u = address as usize;
+        if address_u >= self.memory.len() {
+            self.memory.resize(address_u + 1, 0);
+        }
+
+        Ok(self.memory[address_u])
+    }
+
     /// Put a value into memory at the given address
     pub fn store(&mut self, address: isize, value: isize) -> Result<(), IntcodeError> {
         if address < 0 {
@@ -152,6 +236,20 @@ impl IntcodeProcess {
         let address_u = address as usize;
         if address_u >= self.memory.len() {
             Err(IntcodeError::Segfault(address))?;
+        }
+
+        self.memory[address_u] = value;
+        Ok(())
+    }
+
+    /// Put a value into memory at the given address
+    fn store_with_resize(&mut self, address: isize, value: isize) -> Result<(), IntcodeError> {
+        if address < 0 {
+            Err(IntcodeError::Segfault(address))?;
+        }
+        let address_u = address as usize;
+        if address_u >= self.memory.len() {
+            self.memory.resize(address_u + 1, 0);
         }
 
         self.memory[address_u] = value;
@@ -174,7 +272,8 @@ impl IntcodeProcess {
     /// This makes implementing `run_to_output` easier. It's not very generic, but not adding
     /// something generic until we need it.
     fn step(&mut self) -> Result<Option<isize>, IntcodeError> {
-        let instruction = self.load(self.instruction_counter as isize)?;
+        let instruction = self.load_with_resize(self.instruction_counter as isize)?;
+        let instruction_num = instruction;
 
         let instruction = Instruction::decode(instruction)
             .map_err(|_| IntcodeError::UnknownInstruction(instruction))?;
@@ -188,6 +287,7 @@ impl IntcodeProcess {
             Instruction::JumpIfFalse(in0, in1) => self.jump_if_false(in0, in1).map(|_| None),
             Instruction::LessThan(in0, in1, out) => self.less_than(in0, in1, out).map(|_| None),
             Instruction::Equals(in0, in1, out) => self.equals(in0, in1, out).map(|_| None),
+            Instruction::RelativeMode(in0) => self.relative_mode(in0).map(|_| None),
             Instruction::Halt => self.halt().map(|_| None),
         }
     }
@@ -214,10 +314,11 @@ impl IntcodeProcess {
         mode: InputParameter,
         parameter_location: usize,
     ) -> Result<isize, IntcodeError> {
-        let parameter = self.load(parameter_location as isize)?;
+        let parameter = self.load_with_resize(parameter_location as isize)?;
         let val = match mode {
-            InputParameter::Position => self.load(parameter)?,
+            InputParameter::Position => self.load_with_resize(parameter)?,
             InputParameter::Immediate => parameter,
+            InputParameter::Relative => self.load_with_resize(parameter + self.relative_base)?,
         };
         Ok(val)
     }
@@ -228,8 +329,13 @@ impl IntcodeProcess {
         parameter_location: usize,
         value: isize,
     ) -> Result<(), IntcodeError> {
-        let parameter = self.load(parameter_location as isize)?;
-        self.store(parameter, value)?;
+        let parameter = self.load_with_resize(parameter_location as isize)?;
+        match mode {
+            OutputParameter::Position => self.store_with_resize(parameter, value)?,
+            OutputParameter::Relative => {
+                self.store_with_resize(parameter + self.relative_base, value)?
+            }
+        }
 
         Ok(())
     }
@@ -345,6 +451,14 @@ impl IntcodeProcess {
         };
         self.store_output(out, self.instruction_counter + 3, out_val)?;
         self.instruction_counter += 4;
+
+        Ok(())
+    }
+
+    fn relative_mode(&mut self, in0: InputParameter) -> Result<(), IntcodeError> {
+        let val0 = self.load_input(in0, self.instruction_counter + 1)?;
+        self.relative_base += val0;
+        self.instruction_counter += 2;
 
         Ok(())
     }
@@ -492,6 +606,25 @@ mod test {
     #[test]
     fn test_run_to_output() {
         let input = vec![
+            Instruction::Output(InputParameter::Immediate).encode(),
+            1,
+            Instruction::Output(InputParameter::Immediate).encode(),
+            2,
+            Instruction::Output(InputParameter::Immediate).encode(),
+            3,
+            Instruction::Halt.encode(),
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+        assert_eq!(program.run_to_output(), Ok(1));
+        assert_eq!(program.run_to_output(), Ok(2));
+        assert_eq!(program.run_to_output(), Ok(3));
+        assert_eq!(program.run_to_output(), Err(IntcodeError::CatchFire));
+    }
+
+    #[test]
+    fn test_run_to_output_example() {
+        let input = vec![
             3, 26, 1001, 26, -4, 26, 3, 27, 1002, 27, 2, 27, 1, 27, 26, 27, 4, 27, 1001, 28, -1,
             28, 1005, 28, 6, 99, 0, 0, 5,
         ];
@@ -510,5 +643,211 @@ mod test {
 
         let result_a = program_a.run_to_output();
         assert!(result_a.is_ok());
+    }
+
+    #[test]
+    fn test_relative_mode_input() {
+        let input = vec![
+            Instruction::RelativeMode(InputParameter::Immediate).encode(),
+            9,
+            Instruction::Output(InputParameter::Relative).encode(),
+            0,
+            Instruction::Output(InputParameter::Relative).encode(),
+            1,
+            Instruction::Output(InputParameter::Relative).encode(),
+            -1,
+            Instruction::Halt.encode(),
+            100,
+            101,
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+        assert_eq!(program.outputs(), &[100, 101, 99]);
+        assert_eq!(program.relative_base(), 9);
+    }
+
+    #[test]
+    fn test_relative_mode_output() {
+        let input = vec![
+            Instruction::RelativeMode(InputParameter::Immediate).encode(),
+            15,
+            Instruction::Add(
+                InputParameter::Immediate,
+                InputParameter::Immediate,
+                OutputParameter::Relative,
+            )
+            .encode(),
+            1000,
+            1,
+            0,
+            Instruction::Add(
+                InputParameter::Immediate,
+                InputParameter::Immediate,
+                OutputParameter::Relative,
+            )
+            .encode(),
+            1000,
+            2,
+            1,
+            Instruction::Add(
+                InputParameter::Immediate,
+                InputParameter::Immediate,
+                OutputParameter::Relative,
+            )
+            .encode(),
+            1000,
+            3,
+            -8,
+            Instruction::Halt.encode(),
+            0,
+            0,
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+        assert_eq!(program.load(15 + 0), Ok(1001));
+        assert_eq!(program.load(15 + 1), Ok(1002));
+        assert_eq!(program.load(15 - 8), Ok(1003));
+        assert_eq!(program.relative_base(), 15);
+
+        let input = vec![
+            Instruction::RelativeMode(InputParameter::Immediate).encode(),
+            9,
+            Instruction::Input(OutputParameter::Relative).encode(),
+            0,
+            Instruction::Input(OutputParameter::Relative).encode(),
+            1,
+            Instruction::Input(OutputParameter::Relative).encode(),
+            -4,
+            Instruction::Halt.encode(),
+            0,
+            0,
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+        program.add_input(2001);
+        program.add_input(2002);
+        program.add_input(2003);
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+        assert_eq!(program.load(9 + 0), Ok(2001));
+        assert_eq!(program.load(9 + 1), Ok(2002));
+        assert_eq!(program.load(9 - 4), Ok(2003));
+        assert_eq!(program.relative_base(), 9);
+    }
+
+    #[test]
+    fn test_moving_relative_mode() {
+        let input = vec![
+            Instruction::RelativeMode(InputParameter::Immediate).encode(),
+            13,
+            Instruction::RelativeMode(InputParameter::Immediate).encode(),
+            2, // Relative mode gets altered by this value, not set to this value. So it should be 15 now.
+            Instruction::Output(InputParameter::Relative).encode(),
+            0,
+            Instruction::RelativeMode(InputParameter::Position).encode(),
+            18, // Increase the relative base by the value of memory space 16
+            Instruction::Output(InputParameter::Relative).encode(),
+            0,
+            Instruction::RelativeMode(InputParameter::Relative).encode(),
+            3, // Current relative base should be 14. Set it to be the value of the memory address that's three more, which should be memory address 17 (value 15).
+            Instruction::Output(InputParameter::Relative).encode(),
+            -1,
+            Instruction::Halt.encode(),
+            1015,
+            1016,
+            1017,
+            1,
+            2,
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+        assert_eq!(program.run_to_output(), Ok(1015));
+        assert_eq!(program.relative_base(), 15);
+        assert_eq!(program.run_to_output(), Ok(1016));
+        assert_eq!(program.relative_base(), 16);
+        assert_eq!(program.run_to_output(), Ok(1017));
+        assert_eq!(program.relative_base(), 18);
+        assert_eq!(program.run(), Err(IntcodeError::CatchFire));
+    }
+
+    fn test_quine() {
+        // A test from day 9
+        let input = vec![
+            109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99,
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input.clone());
+
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+
+        assert_eq!(program.outputs(), &input[..]);
+    }
+
+    #[test]
+    fn test_day_large_mult() {
+        // A test from day 9
+        let input = vec![1102, 34915192, 34915192, 7, 4, 7, 99, 0];
+        let mut program = IntcodeProcess::from_vec(input);
+
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+
+        assert_eq!(program.outputs(), &[1219070632396864]);
+    }
+
+    #[test]
+    fn test_large_numbers() {
+        // A test from day 9
+        let input = vec![104, 1125899906842624, 99];
+
+        let mut program = IntcodeProcess::from_vec(input);
+
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+
+        assert_eq!(program.outputs(), &[1125899906842624]);
+    }
+
+    #[test]
+    fn test_extra_space() {
+        let input = vec![
+            Instruction::Output(InputParameter::Position).encode(),
+            1000,
+            Instruction::Halt.encode(),
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+
+        assert_eq!(program.outputs(), &[0]);
+
+        let input = vec![
+            Instruction::Add(
+                InputParameter::Immediate,
+                InputParameter::Immediate,
+                OutputParameter::Position,
+            )
+            .encode(),
+            1,
+            2,
+            1000,
+            Instruction::Output(InputParameter::Position).encode(),
+            1000,
+            Instruction::Halt.encode(),
+        ];
+
+        let mut program = IntcodeProcess::from_vec(input);
+
+        let result = program.run();
+        assert_eq!(result, Err(IntcodeError::CatchFire));
+
+        assert_eq!(program.outputs(), &[3]);
     }
 }
