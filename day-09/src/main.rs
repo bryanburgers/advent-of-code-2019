@@ -13,8 +13,16 @@ fn main() {
         .map(|s| s.parse::<isize>().unwrap())
         .collect();
 
-    let mut process = IntcodeProcess::from_vec(program);
+    let mut process = IntcodeProcess::from_vec(program.clone());
     process.add_input(1);
+    let result = process.run();
+
+    assert_eq!(result, Err(IntcodeError::CatchFire));
+
+    println!("{:?}", process.outputs());
+
+    let mut process = IntcodeProcess::from_vec(program.clone());
+    process.add_input(2);
     let result = process.run();
 
     assert_eq!(result, Err(IntcodeError::CatchFire));
